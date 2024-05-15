@@ -15,19 +15,21 @@ function App() {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    fetch('https://react-3hr-pr-default-rtdb.firebaseio.com/votes.json')
-      .then(response => response.json())
-      .then(data => {
-        if (data) {
-          setVotes(data);
-          const totalCount = Object.values(data).reduce((acc, cur) => acc + cur.count, 0);
-          setTotalVotes(totalCount);
-        }
-      })
-      .catch(error => {
-        console.error("Error fetching data: ", error);
-      });
+  const fetchData = async () => {
+    try {
+      const response = await fetch('https://react-3hr-pr-default-rtdb.firebaseio.com/votes.json');
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      const data = await response.json();
+      if (data) {
+        setVotes(data);
+        const totalCount = Object.values(data).reduce((acc, cur) => acc + cur.count, 0);
+        setTotalVotes(totalCount);
+      }
+    } catch (error) {
+      console.error("Error fetching data: ", error);
+    }
   };
 
   const handleAddVote = () => {
@@ -38,7 +40,7 @@ function App() {
     setIsModalOpen(false);
   };
 
-  const handleVote = (studentName, selectedCandidate) => {
+  const handleVote = async (studentName, selectedCandidate) => {
     const updatedVotes = { ...votes };
     if (!updatedVotes[selectedCandidate].voters) {
       updatedVotes[selectedCandidate].voters = [];
@@ -46,47 +48,46 @@ function App() {
     updatedVotes[selectedCandidate].count++;
     updatedVotes[selectedCandidate].voters.push(studentName);
 
-    fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${selectedCandidate}.json`, {
-      method: 'PUT',
-      body: JSON.stringify(updatedVotes[selectedCandidate])
-    })
-      .then(response => response.json())
-      .then(data => {
-        setVotes({ ...votes, [selectedCandidate]: data });
-        const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
-        setTotalVotes(totalCount);
-      })
-      .catch(error => {
-        console.error("Error updating data: ", error);
+    try {
+      const response = await fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${selectedCandidate}.json`, {
+        method: 'PUT',
+        body: JSON.stringify(updatedVotes[selectedCandidate])
       });
+      if (!response.ok) {
+        throw new Error('Failed to update data');
+      }
+      const data = await response.json();
+      setVotes({ ...votes, [selectedCandidate]: data });
+      const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
+      setTotalVotes(totalCount);
+    } catch (error) {
+      console.error("Error updating data: ", error);
+    }
   };
 
-  const handleRemoveVote = (candidate, voterName) => {
+  const handleRemoveVote = async (candidate, voterName) => {
     const updatedVotes = { ...votes };
     if (updatedVotes[candidate]) {
       const voterIndex = updatedVotes[candidate].voters.indexOf(voterName);
       if (voterIndex !== -1) {
         updatedVotes[candidate].voters.splice(voterIndex, 1);
-  
-        // Decrement the count when a vote is removed
         updatedVotes[candidate].count--;
-  
-        fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${candidate}.json`, {
-          method: 'PUT',
-          body: JSON.stringify(updatedVotes[candidate])
-        })
-          .then(response => {
-            if (response.ok) {
-              setVotes({ ...votes, [candidate]: updatedVotes[candidate] });
-              const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
-              setTotalVotes(totalCount);
-            } else {
-              throw new Error('Failed to remove vote');
-            }
-          })
-          .catch(error => {
-            console.error("Error removing vote: ", error);
+
+        try {
+          const response = await fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${candidate}.json`, {
+            method: 'PUT',
+            body: JSON.stringify(updatedVotes[candidate])
           });
+          if (!response.ok) {
+            throw new Error('Failed to remove vote');
+          }
+          const data = await response.json();
+          setVotes({ ...votes, [candidate]: data });
+          const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
+          setTotalVotes(totalCount);
+        } catch (error) {
+          console.error("Error removing vote: ", error);
+        }
       } else {
         console.error("Voter not found in candidate's voters array");
       }
@@ -94,7 +95,7 @@ function App() {
       console.error("Candidate not found");
     }
   };
-  
+
   return (
     <div className="App">
       <h1>Class Monitor Vote</h1>
