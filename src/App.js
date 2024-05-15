@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import VoteModal from './Votemodal';
 
@@ -11,6 +11,25 @@ function App() {
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = () => {
+    fetch('https://react-3hr-pr-default-rtdb.firebaseio.com/votes.json')
+      .then(response => response.json())
+      .then(data => {
+        if (data) {
+          setVotes(data);
+          const totalCount = Object.values(data).reduce((acc, cur) => acc + cur.count, 0);
+          setTotalVotes(totalCount);
+        }
+      })
+      .catch(error => {
+        console.error("Error fetching data: ", error);
+      });
+  };
+
   const handleAddVote = () => {
     setIsModalOpen(true);
   };
@@ -20,47 +39,78 @@ function App() {
   };
 
   const handleVote = (studentName, selectedCandidate) => {
-    setTotalVotes(prevTotalVotes => prevTotalVotes + 1);
-    setVotes(prevVotes => ({
-      ...prevVotes,
-      [selectedCandidate]: {
-        ...prevVotes[selectedCandidate],
-        count: prevVotes[selectedCandidate].count + 1,
-        voters: [...prevVotes[selectedCandidate].voters, studentName]
-      }
-    }));
+    const updatedVotes = { ...votes };
+    if (!updatedVotes[selectedCandidate].voters) {
+      updatedVotes[selectedCandidate].voters = [];
+    }
+    updatedVotes[selectedCandidate].count++;
+    updatedVotes[selectedCandidate].voters.push(studentName);
+
+    fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${selectedCandidate}.json`, {
+      method: 'PUT',
+      body: JSON.stringify(updatedVotes[selectedCandidate])
+    })
+      .then(response => response.json())
+      .then(data => {
+        setVotes({ ...votes, [selectedCandidate]: data });
+        const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
+        setTotalVotes(totalCount);
+      })
+      .catch(error => {
+        console.error("Error updating data: ", error);
+      });
   };
 
-  const handleRemoveVote = (candidate, voterIndex) => {
-    setTotalVotes(prevTotalVotes => prevTotalVotes - 1);
-    setVotes(prevVotes => ({
-      ...prevVotes,
-      [candidate]: {
-        ...prevVotes[candidate],
-        count: prevVotes[candidate].count - 1,
-        voters: prevVotes[candidate].voters.filter((_, index) => index !== voterIndex)
+  const handleRemoveVote = (candidate, voterName) => {
+    const updatedVotes = { ...votes };
+    if (updatedVotes[candidate]) {
+      const voterIndex = updatedVotes[candidate].voters.indexOf(voterName);
+      if (voterIndex !== -1) {
+        updatedVotes[candidate].voters.splice(voterIndex, 1);
+  
+        // Decrement the count when a vote is removed
+        updatedVotes[candidate].count--;
+  
+        fetch(`https://react-3hr-pr-default-rtdb.firebaseio.com/votes/${candidate}.json`, {
+          method: 'PUT',
+          body: JSON.stringify(updatedVotes[candidate])
+        })
+          .then(response => {
+            if (response.ok) {
+              setVotes({ ...votes, [candidate]: updatedVotes[candidate] });
+              const totalCount = Object.values(updatedVotes).reduce((acc, cur) => acc + cur.count, 0);
+              setTotalVotes(totalCount);
+            } else {
+              throw new Error('Failed to remove vote');
+            }
+          })
+          .catch(error => {
+            console.error("Error removing vote: ", error);
+          });
+      } else {
+        console.error("Voter not found in candidate's voters array");
       }
-    }));
+    } else {
+      console.error("Candidate not found");
+    }
   };
-
-  const candidates = Object.keys(votes);
-
+  
   return (
     <div className="App">
       <h1>Class Monitor Vote</h1>
-      <p>Total Votes: {totalVotes}</p>
+      <p>Total Votes: {isNaN(totalVotes) ? 0 : totalVotes}</p>
       <button onClick={handleAddVote}>Add New Vote</button>
 
       <div className="candidates">
-        {candidates.map(candidate => (
+        {Object.entries(votes).map(([candidate, vote]) => (
           <div key={candidate} className="candidate">
             <h2>{candidate}</h2>
-            <p>Total Votes: {votes[candidate].count}</p>
+            <p>Total Votes: {vote.count}</p>
             <ul>
-              {votes[candidate].voters.map((voter, index) => (
+              {vote.voters && vote.voters.map((voter, index) => (
                 <li key={index}>
                   {voter}
-                  <button onClick={() => handleRemoveVote(candidate, index)}>Remove</button>
+                  <button onClick={() => handleRemoveVote(candidate, voter)}>Remove</button>
                 </li>
               ))}
             </ul>
@@ -71,7 +121,7 @@ function App() {
       <VoteModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        candidates={candidates}
+        candidates={Object.keys(votes)}
         onVote={handleVote}
       />
     </div>
